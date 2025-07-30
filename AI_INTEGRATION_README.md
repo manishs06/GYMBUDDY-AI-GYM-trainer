@@ -1,6 +1,6 @@
 # AI Fitness Trainer Integration
 
-This project integrates AI-powered fitness tracking capabilities with a MERN stack application, based on the [AI-Fitness-trainer](https://github.com/thillai-c/AI-Fitness-trainer.git) repository.
+This project integrates AI-powered fitness tracking capabilities with a MERN stack application, providing comprehensive exercise detection and form analysis.
 
 ## 🚀 Features
 
@@ -230,7 +230,7 @@ npm start
 
 ## 📄 License
 
-This project integrates with the [AI-Fitness-trainer](https://github.com/thillai-c/AI-Fitness-trainer.git) repository and follows the same licensing terms.
+This project provides comprehensive AI-powered fitness tracking with pose detection and exercise analysis.
 
 ## 🤝 Contributing
 
@@ -243,6 +243,6 @@ This project integrates with the [AI-Fitness-trainer](https://github.com/thillai
 ## 📞 Support
 
 For issues related to:
-- **AI Integration**: Check the original [AI-Fitness-trainer](https://github.com/thillai-c/AI-Fitness-trainer.git) repository
+- **AI Integration**: Comprehensive pose detection and exercise analysis
 - **MERN Stack**: Review the main project documentation
 - **General Issues**: Create an issue in this repository 

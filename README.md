@@ -1,6 +1,6 @@
 # GYMBUDDY-AI-GYM-trainer
 
-A comprehensive fitness tracking application built with the MERN stack, enhanced with AI-powered exercise detection and form analysis. This project integrates the [AI-Fitness-trainer](https://github.com/thillai-c/AI-Fitness-trainer.git) repository to provide real-time exercise tracking and form feedback.
+A comprehensive fitness tracking application built with the MERN stack, enhanced with AI-powered exercise detection and form analysis. This project provides a complete AI-powered fitness trainer with real-time exercise tracking and form feedback.
 
 ## 🚀 Features
 
@@ -171,7 +171,7 @@ The project includes test files for both account management and core functionali
 ## 📚 Additional Documentation
 
 - [AI Integration Guide](AI_INTEGRATION_README.md) - Detailed guide for the AI fitness trainer integration
-- [Original AI Fitness Trainer](https://github.com/thillai-c/AI-Fitness-trainer.git) - Source repository for AI functionality
+- AI-powered pose detection and exercise analysis
 
 ## License
 
