@@ -1,0 +1,36 @@
+{
+  "name": "gymbuddy-ai-trainer",
+  "version": "1.0.0",
+  "description": "AI-powered fitness trainer with MERN stack and Python AI backend",
+  "main": "index.js",
+  "scripts": {
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "dev": "concurrently \"npm run server\" \"npm run client\" \"npm run ai-backend\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm start",
+    "ai-backend": "cd ai_backend && python main_simple.py",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "test": "cd server && npm test",
+    "setup": "npm run install-all && echo 'Setup complete! Run npm run dev to start all services'"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  },
+  "keywords": [
+    "fitness",
+    "ai",
+    "workout",
+    "trainer",
+    "mern",
+    "python",
+    "mediapipe",
+    "opencv"
+  ],
+  "author": "GymBuddy Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/gymbuddy-ai-trainer.git"
+  }
+} 
