@@ -23,12 +23,22 @@ app.use(cors({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 1000, // Higher overall limit for development/testing
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use(limiter);
+
+// Special relaxed limiter for real-time AI analysis
+const aiRealTimeLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 1200, // Allow up to 20 requests per second
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Real-time analysis rate limit exceeded. Please slow down.'
+});
+app.use('/api/ai/real-time-analysis', aiRealTimeLimiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -43,8 +53,8 @@ app.use('/api/ai', aiRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     message: 'GymBuddy AI Trainer API is running',
     timestamp: new Date().toISOString()
   });
@@ -53,7 +63,7 @@ app.get('/api/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
+  res.status(500).json({
     message: 'Something went wrong!',
     error: process.env.NODE_ENV === 'development' ? err.message : {}
   });
@@ -69,15 +79,15 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/gymbuddy'
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => {
-  console.log('Connected to MongoDB');
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  .then(() => {
+    console.log('Connected to MongoDB');
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
   });
-})
-.catch((err) => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1);
-});
 
 module.exports = app; 

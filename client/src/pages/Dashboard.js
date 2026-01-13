@@ -199,6 +199,27 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Motivational Tip */}
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg shadow-lg p-6 mb-8 text-white relative overflow-hidden">
+        <div className="relative z-10">
+          <h2 className="text-xl font-bold mb-2">Daily Motivation</h2>
+          <p className="text-lg italic opacity-90">
+            "{[
+              "Consistency is key!",
+              "Your body can stand almost anything. It's your mind that you have to convince.",
+              "The only bad workout is the one that didn't happen.",
+              "Success starts with self-discipline.",
+              "Don't limit your challenges. Challenge your limits."
+            ][Math.floor(Math.random() * 5)]}"
+          </p>
+        </div>
+        <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10">
+          <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+      </div>
+
       {/* Quick Actions */}
       <div className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>

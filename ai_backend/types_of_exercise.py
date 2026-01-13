@@ -1,6 +1,7 @@
 class TypeOfExercise:
     def __init__(self):
         self.counter = 0
+        self.calories = 0.0
         self.stage = None
         self.feedback = ""
         
@@ -11,20 +12,21 @@ class TypeOfExercise:
         shoulder_angle = (left_shoulder_angle + right_shoulder_angle) / 2
         
         # Push-up detection logic
-        if arm_angle > 160 and shoulder_angle > 160:
-            self.stage = "up"
-            self.feedback = "Good form! Keep your body straight."
-        elif arm_angle < 90 and shoulder_angle < 90:
-            if self.stage == "up":
+        if arm_angle < 90 and shoulder_angle > 160:
+            self.stage = "down"
+            self.feedback = "Great depth! Push back up."
+        elif arm_angle > 160 and shoulder_angle > 160:
+            if self.stage == "down":
                 self.counter += 1
-                self.stage = "down"
-                self.feedback = "Great push-up! Keep going."
+                self.calories += 0.5  # Approx calories per push-up
+                self.stage = "up"
+                self.feedback = "Good push-up! Keep your form."
             else:
-                self.feedback = "Lower your body more for a complete push-up."
+                self.feedback = "Start in a plank position."
         else:
             self.feedback = "Maintain proper form - keep your body aligned."
             
-        return self.counter, self.stage, self.feedback
+        return self.counter, self.stage, self.feedback, self.calories
     
     def pull_up(self, left_arm_angle, right_arm_angle, left_shoulder_angle, right_shoulder_angle):
         """Detect pull-up exercise"""
@@ -33,20 +35,21 @@ class TypeOfExercise:
         shoulder_angle = (left_shoulder_angle + right_shoulder_angle) / 2
         
         # Pull-up detection logic
-        if arm_angle < 90 and shoulder_angle < 90:
+        if arm_angle < 90 and shoulder_angle > 160:
             self.stage = "up"
             self.feedback = "Excellent! Chin over the bar."
         elif arm_angle > 160 and shoulder_angle > 160:
             if self.stage == "up":
                 self.counter += 1
+                self.calories += 1.0  # Approx calories per pull-up
                 self.stage = "down"
                 self.feedback = "Perfect pull-up! Full range of motion."
             else:
-                self.feedback = "Lower yourself completely for a full rep."
+                self.feedback = "Hang freely to start."
         else:
-            self.feedback = "Keep your core engaged and avoid swinging."
+            self.feedback = "Keep your core engaged and body straight."
             
-        return self.counter, self.stage, self.feedback
+        return self.counter, self.stage, self.feedback, self.calories
     
     def sit_up(self, left_shoulder_angle, right_shoulder_angle):
         """Detect sit-up exercise"""
@@ -60,6 +63,7 @@ class TypeOfExercise:
         elif shoulder_angle > 160:
             if self.stage == "up":
                 self.counter += 1
+                self.calories += 0.4  # Approx calories per sit-up
                 self.stage = "down"
                 self.feedback = "Great sit-up! Full range of motion."
             else:
@@ -67,7 +71,7 @@ class TypeOfExercise:
         else:
             self.feedback = "Keep your feet flat and avoid using momentum."
             
-        return self.counter, self.stage, self.feedback
+        return self.counter, self.stage, self.feedback, self.calories
     
     def squat(self, left_leg_angle, right_leg_angle):
         """Detect squat exercise"""
@@ -81,6 +85,7 @@ class TypeOfExercise:
         elif leg_angle > 160:
             if self.stage == "down":
                 self.counter += 1
+                self.calories += 0.6  # Approx calories per squat
                 self.stage = "up"
                 self.feedback = "Excellent squat! Full range of motion."
             else:
@@ -88,7 +93,7 @@ class TypeOfExercise:
         else:
             self.feedback = "Keep your chest up and weight in your heels."
             
-        return self.counter, self.stage, self.feedback
+        return self.counter, self.stage, self.feedback, self.calories
     
     def walk(self, left_leg_angle, right_leg_angle):
         """Detect walking exercise"""
@@ -99,6 +104,7 @@ class TypeOfExercise:
         if leg_angle < 120:
             if self.stage != "step":
                 self.counter += 1
+                self.calories += 0.05  # Approx calories per step
                 self.stage = "step"
                 self.feedback = "Good walking form! Keep your posture upright."
             else:
@@ -107,4 +113,4 @@ class TypeOfExercise:
             self.stage = "stand"
             self.feedback = "Maintain good posture while walking."
             
-        return self.counter, self.stage, self.feedback 
+        return self.counter, self.stage, self.feedback, self.calories 

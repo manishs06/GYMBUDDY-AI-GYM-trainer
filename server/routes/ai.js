@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const axios = require('axios');
+const FormData = require('form-data');
 const auth = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
@@ -8,7 +9,7 @@ const router = express.Router();
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
@@ -30,7 +31,7 @@ router.post('/analyze-form', [
   upload.single('media')
 ], async (req, res) => {
   try {
-    const { exerciseId, exerciseName } = req.body;
+    const { exerciseId, exerciseName, exerciseType } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -43,13 +44,14 @@ router.post('/analyze-form', [
       filename: file.originalname,
       contentType: file.mimetype
     });
-    formData.append('exerciseId', exerciseId);
-    formData.append('exerciseName', exerciseName);
+    formData.append('exerciseId', exerciseId || '');
+    formData.append('exerciseName', exerciseName || '');
+    formData.append('exerciseType', exerciseType || exerciseName || 'push-up');
     formData.append('userId', req.user.userId);
 
     // Call Python AI backend
     const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
-    
+
     const response = await axios.post(`${pythonBackendUrl}/api/analyze-form`, formData, {
       headers: {
         ...formData.getHeaders(),
@@ -62,17 +64,17 @@ router.post('/analyze-form', [
 
   } catch (error) {
     console.error('Form analysis error:', error);
-    
+
     if (error.code === 'ECONNREFUSED') {
-      return res.status(503).json({ 
-        message: 'AI analysis service is currently unavailable' 
+      return res.status(503).json({
+        message: 'AI analysis service is currently unavailable'
       });
     }
-    
+
     if (error.response) {
       return res.status(error.response.status).json(error.response.data);
     }
-    
+
     res.status(500).json({ message: 'Error analyzing form' });
   }
 });
@@ -85,7 +87,7 @@ router.post('/real-time-analysis', [
   upload.single('frame')
 ], async (req, res) => {
   try {
-    const { exerciseId, sessionId } = req.body;
+    const { exerciseId, exerciseType, sessionId } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -98,13 +100,13 @@ router.post('/real-time-analysis', [
       filename: file.originalname,
       contentType: file.mimetype
     });
-    formData.append('exerciseId', exerciseId);
-    formData.append('sessionId', sessionId);
+    formData.append('exerciseType', exerciseType || 'push-up');
+    formData.append('sessionId', sessionId || 'default');
     formData.append('userId', req.user.userId);
 
     // Call Python AI backend for real-time analysis
     const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
-    
+
     const response = await axios.post(`${pythonBackendUrl}/api/real-time-analysis`, formData, {
       headers: {
         ...formData.getHeaders(),
@@ -117,17 +119,17 @@ router.post('/real-time-analysis', [
 
   } catch (error) {
     console.error('Real-time analysis error:', error);
-    
+
     if (error.code === 'ECONNREFUSED') {
-      return res.status(503).json({ 
-        message: 'AI analysis service is currently unavailable' 
+      return res.status(503).json({
+        message: 'AI analysis service is currently unavailable'
       });
     }
-    
+
     if (error.response) {
       return res.status(error.response.status).json(error.response.data);
     }
-    
+
     res.status(500).json({ message: 'Error in real-time analysis' });
   }
 });
@@ -141,7 +143,7 @@ router.get('/exercise-suggestions', auth, async (req, res) => {
 
     // Call Python backend for exercise suggestions
     const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
-    
+
     const response = await axios.get(`${pythonBackendUrl}/api/exercise-suggestions`, {
       params: {
         fitnessLevel,
@@ -156,17 +158,17 @@ router.get('/exercise-suggestions', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Exercise suggestions error:', error);
-    
+
     if (error.code === 'ECONNREFUSED') {
-      return res.status(503).json({ 
-        message: 'AI suggestion service is currently unavailable' 
+      return res.status(503).json({
+        message: 'AI suggestion service is currently unavailable'
       });
     }
-    
+
     if (error.response) {
       return res.status(error.response.status).json(error.response.data);
     }
-    
+
     res.status(500).json({ message: 'Error getting exercise suggestions' });
   }
 });
@@ -184,9 +186,9 @@ router.post('/workout-plan', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Validation failed',
-        errors: errors.array() 
+        errors: errors.array()
       });
     }
 
@@ -194,7 +196,7 @@ router.post('/workout-plan', [
 
     // Call Python backend for workout plan generation
     const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
-    
+
     const response = await axios.post(`${pythonBackendUrl}/api/workout-plan`, {
       fitnessLevel,
       goals,
@@ -212,18 +214,80 @@ router.post('/workout-plan', [
 
   } catch (error) {
     console.error('Workout plan generation error:', error);
-    
+
     if (error.code === 'ECONNREFUSED') {
-      return res.status(503).json({ 
-        message: 'AI workout planning service is currently unavailable' 
+      return res.status(503).json({
+        message: 'AI workout planning service is currently unavailable'
       });
     }
-    
+
     if (error.response) {
       return res.status(error.response.status).json(error.response.data);
     }
-    
+
     res.status(500).json({ message: 'Error generating workout plan' });
+  }
+});
+
+
+
+// @route   POST /api/ai/nutrition-plan
+// @desc    Generate personalized nutrition plan
+// @access  Private
+router.post('/nutrition-plan', [
+  auth,
+  body('weight').isFloat({ min: 20 }),
+  body('height').isFloat({ min: 50 }),
+  body('age').isInt({ min: 10 }),
+  body('gender').isIn(['male', 'female', 'other']),
+  body('activity_level').optional().isIn(['sedentary', 'light', 'moderate', 'active', 'very_active']),
+  body('goals').optional().isArray()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { weight, height, age, gender, activity_level = 'moderate', goals = [] } = req.body;
+
+    // Call Python backend for nutrition plan generation
+    const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
+
+    const response = await axios.post(`${pythonBackendUrl}/api/nutrition-plan`, {
+      weight,
+      height,
+      age,
+      gender,
+      activity_level,
+      goals,
+      userId: req.user.userId
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+
+    res.json(response.data);
+
+  } catch (error) {
+    console.error('Nutrition plan generation error:', error);
+
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(503).json({
+        message: 'AI nutrition service is currently unavailable'
+      });
+    }
+
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+
+    res.status(500).json({ message: 'Error generating nutrition plan' });
   }
 });
 
@@ -233,7 +297,7 @@ router.post('/workout-plan', [
 router.get('/health', async (req, res) => {
   try {
     const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
-    
+
     const response = await axios.get(`${pythonBackendUrl}/health`, {
       timeout: 5000
     });
@@ -246,7 +310,7 @@ router.get('/health', async (req, res) => {
 
   } catch (error) {
     console.error('AI health check error:', error);
-    
+
     res.status(503).json({
       status: 'unhealthy',
       pythonBackend: 'unavailable',

@@ -50,6 +50,22 @@ router.put('/profile', [
     .optional()
     .isArray()
     .withMessage('Preferred exercises must be an array'),
+  body('biometrics.age')
+    .optional()
+    .isInt({ min: 10, max: 120 })
+    .withMessage('Age must be between 10 and 120'),
+  body('biometrics.weight')
+    .optional()
+    .isFloat({ min: 20 })
+    .withMessage('Weight must be reasonable'),
+  body('biometrics.height')
+    .optional()
+    .isFloat({ min: 50 })
+    .withMessage('Height must be reasonable'),
+  body('biometrics.gender')
+    .optional()
+    .isIn(['male', 'female', 'other'])
+    .withMessage('Invalid gender'),
   body('preferences.notifications')
     .optional()
     .isBoolean()
@@ -58,9 +74,9 @@ router.put('/profile', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Validation failed',
-        errors: errors.array() 
+        errors: errors.array()
       });
     }
 
@@ -69,12 +85,13 @@ router.put('/profile', [
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const { 
-      username, 
-      fitnessLevel, 
-      goals, 
+    const {
+      username,
+      fitnessLevel,
+      goals,
+      biometrics,
       preferences,
-      profilePicture 
+      profilePicture
     } = req.body;
 
     // Check if username is being changed and if it's already taken
@@ -89,7 +106,15 @@ router.put('/profile', [
     if (fitnessLevel) user.fitnessLevel = fitnessLevel;
     if (goals) user.goals = goals;
     if (profilePicture) user.profilePicture = profilePicture;
-    
+
+    if (biometrics) {
+      if (!user.biometrics) user.biometrics = {};
+      if (biometrics.age) user.biometrics.age = biometrics.age;
+      if (biometrics.weight) user.biometrics.weight = biometrics.weight;
+      if (biometrics.height) user.biometrics.height = biometrics.height;
+      if (biometrics.gender) user.biometrics.gender = biometrics.gender;
+    }
+
     if (preferences) {
       if (preferences.workoutDuration) user.preferences.workoutDuration = preferences.workoutDuration;
       if (preferences.preferredExercises) user.preferences.preferredExercises = preferences.preferredExercises;
@@ -174,9 +199,9 @@ router.post('/change-password', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Validation failed',
-        errors: errors.array() 
+        errors: errors.array()
       });
     }
 
@@ -211,7 +236,7 @@ router.post('/change-password', [
 router.get('/leaderboard', async (req, res) => {
   try {
     const { metric = 'totalSessions', limit = 10 } = req.query;
-    
+
     const validMetrics = ['totalSessions', 'totalWorkoutTime', 'averageFormScore', 'streakDays'];
     if (!validMetrics.includes(metric)) {
       return res.status(400).json({ message: 'Invalid metric' });
@@ -222,7 +247,7 @@ router.get('/leaderboard', async (req, res) => {
       .limit(parseInt(limit))
       .select('username stats.fitnessLevel stats');
 
-    res.json({ 
+    res.json({
       leaderboard: users.map(user => ({
         username: user.username,
         fitnessLevel: user.stats.fitnessLevel,

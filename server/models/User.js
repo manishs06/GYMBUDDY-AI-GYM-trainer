@@ -36,6 +36,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['weight_loss', 'muscle_gain', 'endurance', 'flexibility', 'strength']
   }],
+  biometrics: {
+    age: { type: Number },
+    weight: { type: Number }, // in kg
+    height: { type: Number }, // in cm
+    gender: {
+      type: String,
+      enum: ['male', 'female', 'other']
+    }
+  },
   preferences: {
     workoutDuration: {
       type: Number,
@@ -78,9 +87,9 @@ const userSchema = new mongoose.Schema({
 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
@@ -91,19 +100,19 @@ userSchema.pre('save', async function(next) {
 });
 
 // Method to compare password
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Method to get public profile (without password)
-userSchema.methods.getPublicProfile = function() {
+userSchema.methods.getPublicProfile = function () {
   const userObject = this.toObject();
   delete userObject.password;
   return userObject;
 };
 
 // Virtual for full name
-userSchema.virtual('fullName').get(function() {
+userSchema.virtual('fullName').get(function () {
   return this.username;
 });
 

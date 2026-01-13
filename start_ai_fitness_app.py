@@ -47,11 +47,12 @@ class AIFitnessApp:
         
         # Check npm
         try:
-            result = subprocess.run(['npm', '--version'], capture_output=True, text=True)
+            # Use shell=True on Windows to find npm.cmd
+            result = subprocess.run(['npm', '--version'], capture_output=True, text=True, shell=(os.name == 'nt'))
             if result.returncode == 0:
                 print(f"✅ npm is installed: {result.stdout.strip()}")
             else:
-                print("❌ npm is not installed")
+                print("❌ npm is not installed (check failed)")
                 return False
         except FileNotFoundError:
             print("❌ npm is not installed")
@@ -110,7 +111,8 @@ class AIFitnessApp:
                 ['npm', 'start'],
                 cwd='server',
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                shell=(os.name == 'nt')
             )
             self.processes.append(("MERN Server", process))
             print("✅ MERN server started on http://localhost:5000")
@@ -132,7 +134,8 @@ class AIFitnessApp:
                 ['npm', 'start'],
                 cwd='client',
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                shell=(os.name == 'nt')
             )
             self.processes.append(("React Client", process))
             print("✅ React client started on http://localhost:3000")

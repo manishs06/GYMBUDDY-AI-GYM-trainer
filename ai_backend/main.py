@@ -30,18 +30,38 @@ mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
 class AIFitnessTrainer:
-    def __init__(self):
-        self.pose = mp_pose.Pose(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
+    def __init__(self, mp_model):
+        self.pose = mp_model
         self.body_part_angle = BodyPartAngle()
-        self.type_of_exercise = TypeOfExercise()
-        self.cap = None
-        self.exercise_type = None
-        self.count = 0
-        self.status = 'starting'
-        self.feedback = []
+        # Session storage: sessionId -> { 'exercise': TypeOfExercise, 'last_seen': timestamp }
+        self.sessions = {}
+        self.session_timeout = 600 # 10 minutes
+
+    def get_session(self, session_id):
+        """Retrieve or create a session-specific exercise state"""
+        now = time.time()
+        
+        # Cleanup old sessions occasionally
+        if len(self.sessions) > 100:
+            self.cleanup_sessions()
+
+        if session_id not in self.sessions:
+            self.sessions[session_id] = {
+                'exercise': TypeOfExercise(),
+                'last_seen': now
+            }
+        else:
+            self.sessions[session_id]['last_seen'] = now
+            
+        return self.sessions[session_id]['exercise']
+
+    def cleanup_sessions(self):
+        """Remove sessions that haven't been active for a while"""
+        now = time.time()
+        to_delete = [sid for sid, data in self.sessions.items() 
+                     if now - data['last_seen'] > self.session_timeout]
+        for sid in to_delete:
+            del self.sessions[sid]
         
     def calculate_angle(self, a, b, c):
         """Calculate angle between three points"""
@@ -57,10 +77,12 @@ class AIFitnessTrainer:
             
         return angle
     
-    def analyze_frame(self, frame, exercise_type):
+    def analyze_frame(self, frame, exercise_type, session_id="default"):
         """Analyze a single frame for exercise detection"""
         if frame is None:
             return None
+            
+        exercise_state = self.get_session(session_id)
             
         # Convert BGR to RGB
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -104,17 +126,17 @@ class AIFitnessTrainer:
             
             # Exercise detection based on type
             if exercise_type == "push-up":
-                count, status, feedback = self.type_of_exercise.push_up(left_arm_angle, right_arm_angle, left_shoulder_angle, right_shoulder_angle)
+                count, status, feedback, calories = exercise_state.push_up(left_arm_angle, right_arm_angle, left_shoulder_angle, right_shoulder_angle)
             elif exercise_type == "pull-up":
-                count, status, feedback = self.type_of_exercise.pull_up(left_arm_angle, right_arm_angle, left_shoulder_angle, right_shoulder_angle)
+                count, status, feedback, calories = exercise_state.pull_up(left_arm_angle, right_arm_angle, left_shoulder_angle, right_shoulder_angle)
             elif exercise_type == "sit-up":
-                count, status, feedback = self.type_of_exercise.sit_up(left_shoulder_angle, right_shoulder_angle)
+                count, status, feedback, calories = exercise_state.sit_up(left_shoulder_angle, right_shoulder_angle)
             elif exercise_type == "squat":
-                count, status, feedback = self.type_of_exercise.squat(left_leg_angle, right_leg_angle)
+                count, status, feedback, calories = exercise_state.squat(left_leg_angle, right_leg_angle)
             elif exercise_type == "walk":
-                count, status, feedback = self.type_of_exercise.walk(left_leg_angle, right_leg_angle)
+                count, status, feedback, calories = exercise_state.walk(left_leg_angle, right_leg_angle)
             else:
-                count, status, feedback = 0, "unknown", "Exercise type not supported"
+                count, status, feedback, calories = 0, "unknown", "Exercise type not supported", 0.0
             
             # Draw landmarks
             mp_drawing.draw_landmarks(
@@ -128,11 +150,13 @@ class AIFitnessTrainer:
             cv2.putText(image, f'Count: {count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             cv2.putText(image, f'Status: {status}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             cv2.putText(image, f'Feedback: {feedback}', (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            cv2.putText(image, f'Calories: {calories:.2f}', (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
             return {
                 'count': count,
                 'status': status,
                 'feedback': feedback,
+                'calories': calories,
                 'angles': {
                     'left_arm': left_arm_angle,
                     'right_arm': right_arm_angle,
@@ -162,12 +186,19 @@ class AIFitnessTrainer:
                 'count': 0,
                 'status': 'error',
                 'feedback': f'Error analyzing pose: {str(e)}',
+                'calories': 0.0,
                 'angles': {},
                 'landmarks': {}
             }
 
+# Shared MediaPipe model to save memory
+pose_model = mp_pose.Pose(
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
+
 # Initialize the AI trainer
-ai_trainer = AIFitnessTrainer()
+ai_trainer = AIFitnessTrainer(pose_model)
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -187,6 +218,7 @@ def analyze_form():
             
         file = request.files['media']
         exercise_type = request.form.get('exerciseName', 'push-up')
+        session_id = request.form.get('sessionId', f"upload_{int(time.time())}")
         
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
@@ -211,7 +243,7 @@ def analyze_form():
                 if not ret:
                     break
                     
-                result = ai_trainer.analyze_frame(frame, exercise_type)
+                result = ai_trainer.analyze_frame(frame, exercise_type, session_id)
                 if result:
                     results.append(result)
             
@@ -220,17 +252,19 @@ def analyze_form():
             
             # Calculate summary
             total_count = max([r['count'] for r in results]) if results else 0
+            total_calories = max([r['calories'] for r in results]) if results else 0.0
             final_status = results[-1]['status'] if results else 'unknown'
             feedback = results[-1]['feedback'] if results else 'No analysis available'
             
         else:
             # Handle image file
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            result = ai_trainer.analyze_frame(image, exercise_type)
+            result = ai_trainer.analyze_frame(image, exercise_type, session_id)
             
             if result:
                 results = [result]
                 total_count = result['count']
+                total_calories = result['calories']
                 final_status = result['status']
                 feedback = result['feedback']
             else:
@@ -243,6 +277,7 @@ def analyze_form():
             'success': True,
             'exercise_type': exercise_type,
             'total_count': total_count,
+            'total_calories': total_calories,
             'status': final_status,
             'feedback': feedback,
             'frame_analysis': results,
@@ -264,6 +299,7 @@ def real_time_analysis():
             
         file = request.files['frame']
         exercise_type = request.form.get('exerciseType', 'push-up')
+        session_id = request.form.get('sessionId', 'default')
         
         # Read the frame
         file_bytes = file.read()
@@ -271,13 +307,14 @@ def real_time_analysis():
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         # Analyze the frame
-        result = ai_trainer.analyze_frame(frame, exercise_type)
+        result = ai_trainer.analyze_frame(frame, exercise_type, session_id)
         
         if result:
             return jsonify({
                 'success': True,
                 'exercise_type': exercise_type,
                 'count': result['count'],
+                'calories': result['calories'],
                 'status': result['status'],
                 'feedback': result['feedback'],
                 'angles': result['angles'],
@@ -400,5 +437,83 @@ def generate_workout_plan():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/api/nutrition-plan', methods=['POST'])
+def generate_nutrition_plan():
+    """Generate personalized nutrition plan based on biometrics"""
+    try:
+        data = request.get_json()
+        weight = data.get('weight') # kg
+        height = data.get('height') # cm
+        age = data.get('age')
+        gender = data.get('gender')
+        activity_level = data.get('activity_level', 'moderate')
+        goals = data.get('goals', [])
+        
+        if not all([weight, height, age, gender]):
+             return jsonify({
+                'success': False,
+                'message': 'Missing biometric data',
+                'nutrition_plan': None
+            })
+
+        # Calculate BMR (Mifflin-St Jeor Equation)
+        if gender == 'male':
+            bmr = 10 * weight + 6.25 * height - 5 * age + 5
+        else:
+            bmr = 10 * weight + 6.25 * height - 5 * age - 161
+            
+        # Activity Multipliers
+        multipliers = {
+            'sedentary': 1.2,
+            'light': 1.375,
+            'moderate': 1.55,
+            'active': 1.725,
+            'very_active': 1.9
+        }
+        
+        tdee = bmr * multipliers.get(activity_level, 1.55)
+        
+        # Adjust for goals
+        target_calories = tdee
+        if 'weight_loss' in goals:
+            target_calories -= 500
+        elif 'muscle_gain' in goals:
+            target_calories += 300
+            
+        # Macro split (simplified)
+        macros = {
+            'protein': int(target_calories * 0.3 / 4), # 30% protein
+            'carbs': int(target_calories * 0.4 / 4),   # 40% carbs
+            'fats': int(target_calories * 0.3 / 9)     # 30% fats
+        }
+        
+        nutrition_plan = {
+            'daily_calories': int(target_calories),
+            'bmr': int(bmr),
+            'tdee': int(tdee),
+            'macros': macros,
+            'hydration_target': round(weight * 0.033, 1), # ~33ml per kg
+            'suggestions': []
+        }
+        
+        if 'weight_loss' in goals:
+             nutrition_plan['suggestions'].append("Focus on high-fiber foods and lean proteins.")
+             nutrition_plan['suggestions'].append("Drink water before meals to manage appetite.")
+        if 'muscle_gain' in goals:
+             nutrition_plan['suggestions'].append("Ensure protein intake with every meal.")
+             nutrition_plan['suggestions'].append("Consume complex carbs pre-workout for energy.")
+             
+        return jsonify({
+            'success': True,
+            'nutrition_plan': nutrition_plan,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'error': f'Failed to generate nutrition plan: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True) 
+    app.run(host='0.0.0.0', port=8000, debug=True) 

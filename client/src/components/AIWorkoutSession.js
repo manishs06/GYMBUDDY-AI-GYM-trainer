@@ -9,14 +9,15 @@ const AIWorkoutSession = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { sessionId } = useParams();
-  
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  
+
   const [isRecording, setIsRecording] = useState(false);
   const [exerciseType, setExerciseType] = useState('push-up');
   const [currentCount, setCurrentCount] = useState(0);
+  const [calories, setCalories] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [status, setStatus] = useState('ready');
   const [sessionData, setSessionData] = useState({
@@ -41,8 +42,8 @@ const AIWorkoutSession = () => {
       const formData = new FormData();
       formData.append('frame', frameData, 'frame.jpg');
       formData.append('exerciseType', exerciseType);
-      formData.append('sessionId', sessionId || 'new');
-      
+      formData.append('sessionId', sessionData.id || sessionId || 'new');
+
       const response = await axios.post('/api/ai/real-time-analysis', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -54,6 +55,7 @@ const AIWorkoutSession = () => {
       onSuccess: (data) => {
         if (data.success) {
           setCurrentCount(data.count);
+          setCalories(data.calories || 0);
           setStatus(data.status);
           setFeedback(data.feedback);
         }
@@ -108,7 +110,7 @@ const AIWorkoutSession = () => {
     // Simple quality score calculation based on rep count and session duration
     const duration = sessionData.startTime ? (Date.now() - new Date(sessionData.startTime).getTime()) / 1000 : 0;
     const repsPerMinute = duration > 0 ? (currentCount / duration) * 60 : 0;
-    
+
     // Score based on reps per minute (ideal range: 10-20 reps/min for most exercises)
     if (repsPerMinute >= 10 && repsPerMinute <= 20) return 90;
     if (repsPerMinute >= 8 && repsPerMinute <= 25) return 75;
@@ -125,7 +127,7 @@ const AIWorkoutSession = () => {
           facingMode: 'user'
         }
       });
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
@@ -148,13 +150,21 @@ const AIWorkoutSession = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0);
-      
+
+      // Optimization: Resize to a smaller resolution for AI analysis
+      // 480x360 is plenty for MediaPipe and reduces bandwidth significantly
+      const TARGET_WIDTH = 480;
+      const TARGET_HEIGHT = 360;
+
+      canvas.width = TARGET_WIDTH;
+      canvas.height = TARGET_HEIGHT;
+
+      // Draw the video frame to the canvas with resizing
+      context.drawImage(video, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
       return new Promise((resolve) => {
-        canvas.toBlob(resolve, 'image/jpeg', 0.8);
+        // Reduced quality to 0.7 for faster upload and processing
+        canvas.toBlob(resolve, 'image/jpeg', 0.7);
       });
     }
     return null;
@@ -163,41 +173,65 @@ const AIWorkoutSession = () => {
   const startWorkout = async () => {
     try {
       await startCamera();
-      
+
       const sessionData = {
+        name: `AI ${exerciseType.charAt(0).toUpperCase() + exerciseType.slice(1)} Session`,
+        type: ['walk', 'jogging', 'running'].includes(exerciseType) ? 'cardio' : 'strength',
         exerciseType,
         startTime: new Date().toISOString(),
         userId: user.userId
       };
-      
+
       startSessionMutation.mutate(sessionData);
       setSessionData(prev => ({ ...prev, ...sessionData }));
       setIsRecording(true);
       setStatus('active');
-      
-      // Start real-time analysis
-      const analysisInterval = setInterval(async () => {
-        if (isRecording) {
-          const frameBlob = await captureFrame();
-          if (frameBlob) {
-            realTimeAnalysisMutation.mutate(frameBlob);
-          }
-        } else {
-          clearInterval(analysisInterval);
-        }
-      }, 1000); // Analyze every second
-      
+
+      // Start real-time analysis handled by useEffect now
+
     } catch (error) {
       console.error('Error starting workout:', error);
       toast.error('Failed to start workout');
     }
   };
 
+  // Real-time analysis loop
+  useEffect(() => {
+    let isActive = true;
+
+    const analyzeLoop = async () => {
+      if (!isRecording || !isActive) return;
+
+      try {
+        const frameBlob = await captureFrame();
+        if (frameBlob && isActive) {
+          // Use mutateAsync to wait for response before sending next frame
+          await realTimeAnalysisMutation.mutateAsync(frameBlob);
+        }
+      } catch (error) {
+        console.error('Frame analysis error:', error);
+      }
+
+      if (isActive && isRecording) {
+        // Small delay to prevent CPU/Network saturation, adjust as needed
+        setTimeout(analyzeLoop, 100);
+      }
+    };
+
+    if (isRecording) {
+      analyzeLoop();
+    }
+
+    return () => {
+      isActive = false;
+    };
+  }, [isRecording, captureFrame]);
+
   const stopWorkout = async () => {
     setIsRecording(false);
     setStatus('completed');
     stopCamera();
-    
+
     if (sessionData.id) {
       endSessionMutation.mutate(sessionData);
     }
@@ -226,6 +260,36 @@ const AIWorkoutSession = () => {
     }
     return 'text-yellow-600';
   };
+
+  // Text-to-Speech
+  const speak = useCallback((text) => {
+    if ('speechSynthesis' in window) {
+      // Cancel previous utterances to avoid queue buildup for fast updates
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  }, []);
+
+  // Speak feedback when it changes
+  useEffect(() => {
+    if (feedback && !feedback.includes('Error') && status === 'active') {
+      // Debounce or logic to prevent repetition can be added, 
+      // but for now only speak if significant change or simple feedback
+      speak(feedback);
+    }
+  }, [feedback, status, speak]);
+
+  // Speak count
+  useEffect(() => {
+    if (currentCount > 0) {
+      speak(currentCount.toString());
+    }
+  }, [currentCount, speak]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -324,6 +388,10 @@ const AIWorkoutSession = () => {
                     <span className="font-bold text-blue-600">{currentCount}</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-gray-600">Calories:</span>
+                    <span className="font-bold text-orange-600">{calories.toFixed(1)} kcal</span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-gray-600">Status:</span>
                     <span className={`font-medium ${getStatusColor(status)}`}>
                       {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -354,8 +422,8 @@ const AIWorkoutSession = () => {
                     <div className="flex justify-between">
                       <span className="text-green-700">Duration:</span>
                       <span className="text-green-900">
-                        {sessionData.startTime ? 
-                          Math.floor((Date.now() - new Date(sessionData.startTime).getTime()) / 1000) + 's' : 
+                        {sessionData.startTime ?
+                          Math.floor((Date.now() - new Date(sessionData.startTime).getTime()) / 1000) + 's' :
                           '0s'
                         }
                       </span>

@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "install-all": "npm install && cd server && npm install && cd ../client && npm install",
-    "dev": "concurrently \"npm run server\" \"npm run client\" \"npm run ai-backend\"",
+    "dev": "python start_ai_fitness_app.py",
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
-    "ai-backend": "cd ai_backend && python main_simple.py",
+    "ai-backend": "cd ai_backend && python main.py",
     "build": "cd client && npm run build",
     "start": "cd server && npm start",
     "test": "cd server && npm test",
@@ -33,4 +33,4 @@
     "type": "git",
     "url": "https://github.com/manishs06/GYMBUDDY-AI-GYM-trainer.git"
   }
-} 
+}

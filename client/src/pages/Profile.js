@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
+import toast from 'react-hot-toast';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const Profile = () => {
@@ -7,11 +9,17 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const [profileData, setProfileData] = useState({
     username: user?.username || '',
     fitnessLevel: user?.fitnessLevel || 'beginner',
     goals: user?.goals || [],
+    biometrics: {
+      age: user?.biometrics?.age || '',
+      weight: user?.biometrics?.weight || '',
+      height: user?.biometrics?.height || '',
+      gender: user?.biometrics?.gender || 'male'
+    },
     preferences: {
       workoutDuration: user?.preferences?.workoutDuration || 30,
       notifications: user?.preferences?.notifications || true
@@ -57,6 +65,17 @@ const Profile = () => {
     }));
   };
 
+  const handleBiometricChange = (e) => {
+    const { name, value } = e.target;
+    setProfileData(prev => ({
+      ...prev,
+      biometrics: {
+        ...prev.biometrics,
+        [name]: value
+      }
+    }));
+  };
+
   const handlePreferenceChange = (key, value) => {
     setProfileData(prev => ({
       ...prev,
@@ -65,6 +84,27 @@ const Profile = () => {
         [key]: value
       }
     }));
+  };
+
+  const [nutritionPlan, setNutritionPlan] = useState(null);
+  const [loadingPlan, setLoadingPlan] = useState(false);
+
+  const generateNutritionPlan = async () => {
+    setLoadingPlan(true);
+    try {
+      const response = await axios.post('/api/ai/nutrition-plan', {
+        ...profileData.biometrics,
+        goals: profileData.goals,
+        activity_level: 'moderate' // could be added to profile later
+      });
+      setNutritionPlan(response.data.nutrition_plan);
+      toast.success("Nutrition Plan Generated!");
+    } catch (error) {
+      toast.error("Failed to generate plan. Ensure biometrics are saved.");
+      console.error(error);
+    } finally {
+      setLoadingPlan(false);
+    }
   };
 
   const handlePasswordChange = (e) => {
@@ -114,7 +154,7 @@ const Profile = () => {
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validatePasswordChange()) {
       return;
     }
@@ -239,6 +279,82 @@ const Profile = () => {
                   </div>
                 </div>
 
+                <div className="mt-6 border-t pt-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Biometrics & Nutrition</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Age</label>
+                      <input type="number" name="age" value={profileData.biometrics.age} onChange={handleBiometricChange} disabled={!isEditing} className="w-full px-3 py-2 border rounded-md disabled:bg-gray-100" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Weight (kg)</label>
+                      <input type="number" name="weight" value={profileData.biometrics.weight} onChange={handleBiometricChange} disabled={!isEditing} className="w-full px-3 py-2 border rounded-md disabled:bg-gray-100" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Height (cm)</label>
+                      <input type="number" name="height" value={profileData.biometrics.height} onChange={handleBiometricChange} disabled={!isEditing} className="w-full px-3 py-2 border rounded-md disabled:bg-gray-100" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+                      <select name="gender" value={profileData.biometrics.gender} onChange={handleBiometricChange} disabled={!isEditing} className="w-full px-3 py-2 border rounded-md disabled:bg-gray-100">
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* BMI Calculator Display */}
+                  {profileData.biometrics && profileData.biometrics.weight && profileData.biometrics.height && (
+                    <div className="mt-6 p-4 bg-blue-50 rounded-lg flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-blue-900">BMI Calculation</h4>
+                        <p className="text-blue-700">
+                          Your Body Mass Index:
+                          <span className="font-bold text-xl ml-2">
+                            {(profileData.biometrics.weight / Math.pow(profileData.biometrics.height / 100, 2)).toFixed(1)}
+                          </span>
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold
+                          ${(profileData.biometrics.weight / Math.pow(profileData.biometrics.height / 100, 2)) < 18.5 ? 'bg-yellow-200 text-yellow-800' :
+                            (profileData.biometrics.weight / Math.pow(profileData.biometrics.height / 100, 2)) < 25 ? 'bg-green-200 text-green-800' :
+                              (profileData.biometrics.weight / Math.pow(profileData.biometrics.height / 100, 2)) < 30 ? 'bg-orange-200 text-orange-800' :
+                                'bg-red-200 text-red-800'
+                          }
+                        `}>
+                          {(profileData.biometrics.weight / Math.pow(profileData.biometrics.height / 100, 2)) < 18.5 ? 'Underweight' :
+                            (profileData.biometrics.weight / Math.pow(profileData.biometrics.height / 100, 2)) < 25 ? 'Normal Weight' :
+                              (profileData.biometrics.weight / Math.pow(profileData.biometrics.height / 100, 2)) < 30 ? 'Overweight' : 'Obese'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isEditing && (
+                    <div className="mt-4">
+                      <button type="button" onClick={generateNutritionPlan} disabled={loadingPlan} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50">
+                        {loadingPlan ? 'Generating...' : 'Generate Nutrition Plan'}
+                      </button>
+
+                      {nutritionPlan && (
+                        <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                          <h4 className="font-bold text-green-900 mb-2">Your Personal Plan</h4>
+                          <p><strong>Calories:</strong> {nutritionPlan.daily_calories} kcal/day</p>
+                          <p><strong>Protein:</strong> {nutritionPlan.macros.protein}g</p>
+                          <p><strong>Carbs:</strong> {nutritionPlan.macros.carbs}g</p>
+                          <p><strong>Fats:</strong> {nutritionPlan.macros.fats}g</p>
+                          <p><strong>Hydration:</strong> {nutritionPlan.hydration_target} L/day</p>
+                          <ul className="mt-2 list-disc pl-5 text-sm">
+                            {nutritionPlan.suggestions.map((s, i) => <li key={i}>{s}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="mt-6">
                   <label className="flex items-center">
                     <input
@@ -334,95 +450,97 @@ const Profile = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div >
 
       {/* Password Change Modal */}
-      {isChangingPassword && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-              <form onSubmit={handlePasswordSubmit}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Current Password
-                    </label>
-                    <input
-                      type="password"
-                      name="currentPassword"
-                      value={passwordData.currentPassword}
-                      onChange={handlePasswordChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    {errors.currentPassword && (
-                      <p className="text-sm text-red-600 mt-1">{errors.currentPassword}</p>
-                    )}
+      {
+        isChangingPassword && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+              <div className="mt-3">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
+                <form onSubmit={handlePasswordSubmit}>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        name="currentPassword"
+                        value={passwordData.currentPassword}
+                        onChange={handlePasswordChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {errors.currentPassword && (
+                        <p className="text-sm text-red-600 mt-1">{errors.currentPassword}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="newPassword"
+                        value={passwordData.newPassword}
+                        onChange={handlePasswordChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {errors.newPassword && (
+                        <p className="text-sm text-red-600 mt-1">{errors.newPassword}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        value={passwordData.confirmPassword}
+                        onChange={handlePasswordChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {errors.confirmPassword && (
+                        <p className="text-sm text-red-600 mt-1">{errors.confirmPassword}</p>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      New Password
-                    </label>
-                    <input
-                      type="password"
-                      name="newPassword"
-                      value={passwordData.newPassword}
-                      onChange={handlePasswordChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    {errors.newPassword && (
-                      <p className="text-sm text-red-600 mt-1">{errors.newPassword}</p>
-                    )}
+                  <div className="mt-6 flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsChangingPassword(false);
+                        setPasswordData({
+                          currentPassword: '',
+                          newPassword: '',
+                          confirmPassword: ''
+                        });
+                        setErrors({});
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isLoading ? <LoadingSpinner size="sm" /> : 'Change Password'}
+                    </button>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Confirm New Password
-                    </label>
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      value={passwordData.confirmPassword}
-                      onChange={handlePasswordChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    {errors.confirmPassword && (
-                      <p className="text-sm text-red-600 mt-1">{errors.confirmPassword}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsChangingPassword(false);
-                      setPasswordData({
-                        currentPassword: '',
-                        newPassword: '',
-                        confirmPassword: ''
-                      });
-                      setErrors({});
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {isLoading ? <LoadingSpinner size="sm" /> : 'Change Password'}
-                  </button>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 
