@@ -20,6 +20,8 @@ const AIWorkoutSession = () => {
   const [calories, setCalories] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [status, setStatus] = useState('ready');
+  const [landmarks, setLandmarks] = useState([]);
+  const skeletonCanvasRef = useRef(null); // Used for drawing overlay
   const [sessionData, setSessionData] = useState({
     startTime: null,
     endTime: null,
@@ -58,6 +60,7 @@ const AIWorkoutSession = () => {
           setCalories(data.calories || 0);
           setStatus(data.status);
           setFeedback(data.feedback);
+          setLandmarks(data.landmarks || []);
         }
       },
       onError: (error) => {
@@ -213,8 +216,8 @@ const AIWorkoutSession = () => {
       }
 
       if (isActive && isRecording) {
-        // Small delay to prevent CPU/Network saturation, adjust as needed
-        setTimeout(analyzeLoop, 100);
+        // Optimized delay for responsiveness vs CPU (75ms ~ 13fps)
+        setTimeout(analyzeLoop, 75);
       }
     };
 
@@ -226,6 +229,63 @@ const AIWorkoutSession = () => {
       isActive = false;
     };
   }, [isRecording, captureFrame]);
+
+  // Client-side skeleton drawing
+  useEffect(() => {
+    if (!landmarks || landmarks.length === 0 || !skeletonCanvasRef.current || !videoRef.current) {
+      if (skeletonCanvasRef.current) {
+        const canvas = skeletonCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
+
+    const canvas = skeletonCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const video = videoRef.current;
+
+    // Match canvas size to video display size
+    canvas.width = video.offsetWidth;
+    canvas.height = video.offsetHeight;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Scaling factors
+    const scaleX = canvas.width;
+    const scaleY = canvas.height;
+
+    // Draw Connections (Simplified list of pose connections)
+    const connections = [
+      [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms
+      [11, 23], [12, 24], [23, 24],                   // Torso
+      [23, 25], [25, 27], [24, 26], [26, 28]         // Legs
+    ];
+
+    ctx.strokeStyle = '#00FF00';
+    ctx.lineWidth = 3;
+
+    connections.forEach(([i, j]) => {
+      const p1 = landmarks[i];
+      const p2 = landmarks[j];
+      if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
+        ctx.beginPath();
+        ctx.moveTo(p1.x * scaleX, p1.y * scaleY);
+        ctx.lineTo(p2.x * scaleX, p2.y * scaleY);
+        ctx.stroke();
+      }
+    });
+
+    // Draw Joints
+    ctx.fillStyle = '#FF0000';
+    landmarks.forEach((lm) => {
+      if (lm.visibility > 0.5) {
+        ctx.beginPath();
+        ctx.arc(lm.x * scaleX, lm.y * scaleY, 4, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    });
+  }, [landmarks]);
 
   const stopWorkout = async () => {
     setIsRecording(false);
@@ -317,6 +377,10 @@ const AIWorkoutSession = () => {
                   playsInline
                   muted
                   className="w-full h-96 object-cover"
+                />
+                <canvas
+                  ref={skeletonCanvasRef}
+                  className="absolute inset-0 w-full h-96 pointer-events-none"
                 />
                 <canvas
                   ref={canvasRef}

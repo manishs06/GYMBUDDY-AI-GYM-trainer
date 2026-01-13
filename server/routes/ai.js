@@ -47,15 +47,14 @@ router.post('/analyze-form', [
     formData.append('exerciseId', exerciseId || '');
     formData.append('exerciseName', exerciseName || '');
     formData.append('exerciseType', exerciseType || exerciseName || 'push-up');
-    formData.append('userId', req.user.userId);
+    formData.append('userId', req.user.userId.toString());
 
     // Call Python AI backend
     const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
 
     const response = await axios.post(`${pythonBackendUrl}/api/analyze-form`, formData, {
       headers: {
-        ...formData.getHeaders(),
-        'Content-Type': 'multipart/form-data'
+        ...formData.getHeaders()
       },
       timeout: 30000 // 30 second timeout
     });
@@ -102,15 +101,14 @@ router.post('/real-time-analysis', [
     });
     formData.append('exerciseType', exerciseType || 'push-up');
     formData.append('sessionId', sessionId || 'default');
-    formData.append('userId', req.user.userId);
+    formData.append('userId', req.user.userId.toString());
 
     // Call Python AI backend for real-time analysis
     const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000';
 
     const response = await axios.post(`${pythonBackendUrl}/api/real-time-analysis`, formData, {
       headers: {
-        ...formData.getHeaders(),
-        'Content-Type': 'multipart/form-data'
+        ...formData.getHeaders()
       },
       timeout: 10000 // 10 second timeout for real-time
     });
@@ -127,6 +125,7 @@ router.post('/real-time-analysis', [
     }
 
     if (error.response) {
+      console.error('Python backend error response:', error.response.data);
       return res.status(error.response.status).json(error.response.data);
     }
 

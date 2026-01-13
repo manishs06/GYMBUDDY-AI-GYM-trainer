@@ -138,20 +138,16 @@ class AIFitnessTrainer:
             else:
                 count, status, feedback, calories = 0, "unknown", "Exercise type not supported", 0.0
             
-            # Draw landmarks
-            mp_drawing.draw_landmarks(
-                image,
-                results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
-                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
-            )
-            
-            # Add text overlay
-            cv2.putText(image, f'Count: {count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.putText(image, f'Status: {status}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.putText(image, f'Feedback: {feedback}', (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.putText(image, f'Calories: {calories:.2f}', (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
+            # Extract all 33 raw landmarks for client-side drawing
+            raw_landmarks = []
+            for lm in landmarks:
+                raw_landmarks.append({
+                    'x': lm.x,
+                    'y': lm.y,
+                    'z': lm.z,
+                    'visibility': lm.visibility
+                })
+
             return {
                 'count': count,
                 'status': status,
@@ -165,20 +161,7 @@ class AIFitnessTrainer:
                     'left_shoulder': left_shoulder_angle,
                     'right_shoulder': right_shoulder_angle
                 },
-                'landmarks': {
-                    'left_shoulder': left_shoulder,
-                    'left_elbow': left_elbow,
-                    'left_wrist': left_wrist,
-                    'right_shoulder': right_shoulder,
-                    'right_elbow': right_elbow,
-                    'right_wrist': right_wrist,
-                    'left_hip': left_hip,
-                    'left_knee': left_knee,
-                    'left_ankle': left_ankle,
-                    'right_hip': right_hip,
-                    'right_knee': right_knee,
-                    'right_ankle': right_ankle
-                }
+                'landmarks': raw_landmarks
             }
             
         except Exception as e:
@@ -188,11 +171,13 @@ class AIFitnessTrainer:
                 'feedback': f'Error analyzing pose: {str(e)}',
                 'calories': 0.0,
                 'angles': {},
-                'landmarks': {}
+                'landmarks': []
             }
 
-# Shared MediaPipe model to save memory
+# Shared MediaPipe model to save memory - Complexity 0 is "Lite" (fastest)
 pose_model = mp_pose.Pose(
+    static_image_mode=False,
+    model_complexity=0,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5
 )
@@ -318,6 +303,7 @@ def real_time_analysis():
                 'status': result['status'],
                 'feedback': result['feedback'],
                 'angles': result['angles'],
+                'landmarks': result['landmarks'],
                 'timestamp': datetime.now().isoformat()
             })
         else:
