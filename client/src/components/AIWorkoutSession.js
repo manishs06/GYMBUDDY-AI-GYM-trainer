@@ -178,7 +178,7 @@ const AIWorkoutSession = () => {
       await startCamera();
 
       const sessionData = {
-        name: `AI ${exerciseType.charAt(0).toUpperCase() + exerciseType.slice(1)} Session`,
+        name: `AI ${(exerciseType || 'Workout').charAt(0).toUpperCase() + (exerciseType || 'Workout').slice(1)} Session`,
         type: ['walk', 'jogging', 'running'].includes(exerciseType) ? 'cardio' : 'strength',
         exerciseType,
         startTime: new Date().toISOString(),
@@ -304,12 +304,20 @@ const AIWorkoutSession = () => {
   }, [stopCamera]);
 
   const getStatusColor = (status) => {
+    if (!status) return 'text-gray-500';
     switch (status) {
-      case 'ready': return 'text-gray-500';
+      case 'ready': return 'text-blue-500';
       case 'active': return 'text-green-500';
+      case 'paused': return 'text-yellow-500';
       case 'completed': return 'text-blue-500';
+      case 'no_person': return 'text-red-500';
       default: return 'text-gray-500';
     }
+  };
+
+  const getStatusText = (status) => {
+    if (!status) return 'Unknown';
+    return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
   };
 
   const getFeedbackColor = (feedback) => {
@@ -359,7 +367,7 @@ const AIWorkoutSession = () => {
             <h1 className="text-3xl font-bold text-gray-900">AI Workout Session</h1>
             <div className="flex items-center space-x-4">
               <span className={`text-lg font-semibold ${getStatusColor(status)}`}>
-                Status: {status.charAt(0).toUpperCase() + status.slice(1)}
+                Status: {getStatusText(status)}
               </span>
               <div className="text-2xl font-bold text-blue-600">
                 Count: {currentCount}
@@ -445,7 +453,9 @@ const AIWorkoutSession = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Exercise:</span>
-                    <span className="font-medium">{exerciseOptions.find(opt => opt.value === exerciseType)?.label}</span>
+                    <span className="font-medium">
+                      {exerciseOptions.find(opt => opt.value === exerciseType)?.label || 'Select exercise'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Reps:</span>
@@ -458,7 +468,7 @@ const AIWorkoutSession = () => {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Status:</span>
                     <span className={`font-medium ${getStatusColor(status)}`}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      {getStatusText(status)}
                     </span>
                   </div>
                 </div>

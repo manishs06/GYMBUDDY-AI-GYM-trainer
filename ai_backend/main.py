@@ -96,6 +96,16 @@ class AIFitnessTrainer:
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         
         # Extract landmarks
+        if not results.pose_landmarks:
+            return {
+                'count': exercise_state.counter,
+                'status': 'no_person',
+                'feedback': 'No person detected in frame',
+                'calories': exercise_state.calories,
+                'angles': {},
+                'landmarks': []
+            }
+
         try:
             landmarks = results.pose_landmarks.landmark
             
@@ -285,6 +295,8 @@ def real_time_analysis():
         file = request.files['frame']
         exercise_type = request.form.get('exerciseType', 'push-up')
         session_id = request.form.get('sessionId', 'default')
+        
+        print(f"Analyzing frame: ex={exercise_type}, sid={session_id}")
         
         # Read the frame
         file_bytes = file.read()
