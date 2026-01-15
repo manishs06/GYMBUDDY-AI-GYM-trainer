@@ -61,6 +61,9 @@ const AIWorkoutSession = () => {
           setStatus(data.status);
           setFeedback(data.feedback);
           setLandmarks(data.landmarks || []);
+          if (data.landmarks) {
+            console.log('AI Analysis: Landmarks received -', data.landmarks.length);
+          }
         }
       },
       onError: (error) => {
@@ -177,7 +180,7 @@ const AIWorkoutSession = () => {
     try {
       await startCamera();
 
-      const sessionData = {
+      const newSessionInfo = {
         name: `AI ${(exerciseType || 'Workout').charAt(0).toUpperCase() + (exerciseType || 'Workout').slice(1)} Session`,
         type: ['walk', 'jogging', 'running'].includes(exerciseType) ? 'cardio' : 'strength',
         exerciseType,
@@ -185,8 +188,8 @@ const AIWorkoutSession = () => {
         userId: user.userId
       };
 
-      startSessionMutation.mutate(sessionData);
-      setSessionData(prev => ({ ...prev, ...sessionData }));
+      startSessionMutation.mutate(newSessionInfo);
+      setSessionData(prev => ({ ...prev, ...newSessionInfo }));
       setIsRecording(true);
       setStatus('active');
 
@@ -249,6 +252,8 @@ const AIWorkoutSession = () => {
     canvas.width = video.offsetWidth;
     canvas.height = video.offsetHeight;
 
+    console.log('API Drawing: Canvas Size -', canvas.width, 'x', canvas.height, 'Landmarks -', landmarks.length);
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Scaling factors
@@ -268,7 +273,7 @@ const AIWorkoutSession = () => {
     connections.forEach(([i, j]) => {
       const p1 = landmarks[i];
       const p2 = landmarks[j];
-      if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
+      if (p1 && p2 && p1.visibility > 0.2 && p2.visibility > 0.2) {
         ctx.beginPath();
         ctx.moveTo(p1.x * scaleX, p1.y * scaleY);
         ctx.lineTo(p2.x * scaleX, p2.y * scaleY);
@@ -279,7 +284,7 @@ const AIWorkoutSession = () => {
     // Draw Joints
     ctx.fillStyle = '#FF0000';
     landmarks.forEach((lm) => {
-      if (lm.visibility > 0.5) {
+      if (lm.visibility > 0.2) {
         ctx.beginPath();
         ctx.arc(lm.x * scaleX, lm.y * scaleY, 4, 0, 2 * Math.PI);
         ctx.fill();
@@ -388,7 +393,7 @@ const AIWorkoutSession = () => {
                 />
                 <canvas
                   ref={skeletonCanvasRef}
-                  className="absolute inset-0 w-full h-96 pointer-events-none"
+                  className="absolute inset-0 w-full h-96 pointer-events-none z-10 border-2 border-pink-500"
                 />
                 <canvas
                   ref={canvasRef}
@@ -497,7 +502,7 @@ const AIWorkoutSession = () => {
                       <span className="text-green-700">Duration:</span>
                       <span className="text-green-900">
                         {sessionData.startTime ?
-                          Math.floor((Date.now() - new Date(sessionData.startTime).getTime()) / 1000) + 's' :
+                          Math.floor((new Date().getTime() - new Date(sessionData.startTime).getTime()) / 1000) + 's' :
                           '0s'
                         }
                       </span>
