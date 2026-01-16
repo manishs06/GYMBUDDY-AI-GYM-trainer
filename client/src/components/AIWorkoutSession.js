@@ -165,14 +165,17 @@ const AIWorkoutSession = () => {
       canvas.width = TARGET_WIDTH;
       canvas.height = TARGET_HEIGHT;
 
-      // Draw the video frame to the canvas with resizing
+      console.log('AI Logic: Capturing frame...');
       context.drawImage(video, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
 
       return new Promise((resolve) => {
-        // Reduced quality to 0.7 for faster upload and processing
-        canvas.toBlob(resolve, 'image/jpeg', 0.7);
+        canvas.toBlob((blob) => {
+          console.log('AI Logic: Frame captured, blob size:', blob?.size);
+          resolve(blob);
+        }, 'image/jpeg', 0.7);
       });
     }
+    console.warn('AI Logic: captureFrame failed - missing refs', !!videoRef.current, !!canvasRef.current);
     return null;
   }, []);
 
@@ -209,10 +212,14 @@ const AIWorkoutSession = () => {
       if (!isRecording || !isActive) return;
 
       try {
+        console.log('AI Loop: Iterating...');
         const frameBlob = await captureFrame();
         if (frameBlob && isActive) {
-          // Use mutateAsync to wait for response before sending next frame
+          console.log('AI Loop: Sending frame to backend...');
           await realTimeAnalysisMutation.mutateAsync(frameBlob);
+          console.log('AI Loop: Received response from backend');
+        } else {
+          console.log('AI Loop: Skip mutation', !!frameBlob, isActive);
         }
       } catch (error) {
         console.error('Frame analysis error:', error);
