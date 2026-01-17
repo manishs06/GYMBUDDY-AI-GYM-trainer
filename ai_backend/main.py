@@ -296,8 +296,6 @@ def real_time_analysis():
         exercise_type = request.form.get('exerciseType', 'push-up')
         session_id = request.form.get('sessionId', 'default')
         
-        print(f"Analyzing frame: ex={exercise_type}, sid={session_id}")
-        
         # Read the frame
         file_bytes = file.read()
         nparr = np.frombuffer(file_bytes, np.uint8)

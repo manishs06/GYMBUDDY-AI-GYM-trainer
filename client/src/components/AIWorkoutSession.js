@@ -5,6 +5,74 @@ import { useAuth } from '../contexts/AuthContext';
 import { useMutation } from 'react-query';
 import axios from 'axios';
 
+const SkeletonOverlay = React.memo(({ landmarks, videoRef }) => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || !videoRef.current) return;
+
+    if (!landmarks || landmarks.length === 0) {
+      const ctx = canvasRef.current.getContext('2d');
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const video = videoRef.current;
+
+    // Only resize canvas if dimensions actually changed (performance)
+    if (canvas.width !== video.offsetWidth || canvas.height !== video.offsetHeight) {
+      canvas.width = video.offsetWidth;
+      canvas.height = video.offsetHeight;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Scaling factors
+    const scaleX = canvas.width;
+    const scaleY = canvas.height;
+
+    // Draw Connections (Simplified list of pose connections)
+    const connections = [
+      [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms
+      [11, 23], [12, 24], [23, 24],                   // Torso
+      [23, 25], [25, 27], [24, 26], [26, 28]         // Legs
+    ];
+
+    ctx.strokeStyle = '#00FF00';
+    ctx.lineWidth = 3;
+
+    connections.forEach(([i, j]) => {
+      const p1 = landmarks[i];
+      const p2 = landmarks[j];
+      if (p1 && p2 && p1.visibility > 0.2 && p2.visibility > 0.2) {
+        ctx.beginPath();
+        ctx.moveTo(p1.x * scaleX, p1.y * scaleY);
+        ctx.lineTo(p2.x * scaleX, p2.y * scaleY);
+        ctx.stroke();
+      }
+    });
+
+    // Draw Joints
+    ctx.fillStyle = '#FF0000';
+    landmarks.forEach((lm) => {
+      if (lm.visibility > 0.2) {
+        ctx.beginPath();
+        ctx.arc(lm.x * scaleX, lm.y * scaleY, 4, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    });
+  }, [landmarks, videoRef]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-96 pointer-events-none z-10"
+    />
+  );
+});
+
 const AIWorkoutSession = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -21,7 +89,6 @@ const AIWorkoutSession = () => {
   const [feedback, setFeedback] = useState('');
   const [status, setStatus] = useState('ready');
   const [landmarks, setLandmarks] = useState([]);
-  const skeletonCanvasRef = useRef(null); // Used for drawing overlay
   const [sessionData, setSessionData] = useState({
     startTime: null,
     endTime: null,
@@ -61,9 +128,6 @@ const AIWorkoutSession = () => {
           setStatus(data.status);
           setFeedback(data.feedback);
           setLandmarks(data.landmarks || []);
-          if (data.landmarks) {
-            console.log('AI Analysis: Landmarks received -', data.landmarks.length);
-          }
         }
       },
       onError: (error) => {
@@ -158,21 +222,21 @@ const AIWorkoutSession = () => {
       const context = canvas.getContext('2d');
 
       // Optimization: Resize to a smaller resolution for AI analysis
-      // 480x360 is plenty for MediaPipe and reduces bandwidth significantly
-      const TARGET_WIDTH = 480;
-      const TARGET_HEIGHT = 360;
+      // 320x240 is enough for MediaPipe Pose Lite and reduces bandwidth significantly
+      const TARGET_WIDTH = 320;
+      const TARGET_HEIGHT = 240;
 
-      canvas.width = TARGET_WIDTH;
-      canvas.height = TARGET_HEIGHT;
+      if (canvas.width !== TARGET_WIDTH || canvas.height !== TARGET_HEIGHT) {
+        canvas.width = TARGET_WIDTH;
+        canvas.height = TARGET_HEIGHT;
+      }
 
-      console.log('AI Logic: Capturing frame...');
       context.drawImage(video, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
 
       return new Promise((resolve) => {
         canvas.toBlob((blob) => {
-          console.log('AI Logic: Frame captured, blob size:', blob?.size);
           resolve(blob);
-        }, 'image/jpeg', 0.7);
+        }, 'image/jpeg', 0.5);
       });
     }
     console.warn('AI Logic: captureFrame failed - missing refs', !!videoRef.current, !!canvasRef.current);
@@ -212,22 +276,18 @@ const AIWorkoutSession = () => {
       if (!isRecording || !isActive) return;
 
       try {
-        console.log('AI Loop: Iterating...');
         const frameBlob = await captureFrame();
         if (frameBlob && isActive) {
-          console.log('AI Loop: Sending frame to backend...');
           await realTimeAnalysisMutation.mutateAsync(frameBlob);
-          console.log('AI Loop: Received response from backend');
-        } else {
-          console.log('AI Loop: Skip mutation', !!frameBlob, isActive);
         }
       } catch (error) {
         console.error('Frame analysis error:', error);
       }
 
       if (isActive && isRecording) {
-        // Optimized delay for responsiveness vs CPU (75ms ~ 13fps)
-        setTimeout(analyzeLoop, 75);
+        // Reduced delay for better responsiveness, requestAnimationFrame would be ideal but 
+        // we are limited by network latency. 30ms reduces idle time.
+        setTimeout(analyzeLoop, 30);
       }
     };
 
@@ -239,66 +299,6 @@ const AIWorkoutSession = () => {
       isActive = false;
     };
   }, [isRecording, captureFrame]);
-
-  // Client-side skeleton drawing
-  useEffect(() => {
-    if (!landmarks || landmarks.length === 0 || !skeletonCanvasRef.current || !videoRef.current) {
-      if (skeletonCanvasRef.current) {
-        const canvas = skeletonCanvasRef.current;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      return;
-    }
-
-    const canvas = skeletonCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const video = videoRef.current;
-
-    // Match canvas size to video display size
-    canvas.width = video.offsetWidth;
-    canvas.height = video.offsetHeight;
-
-    console.log('API Drawing: Canvas Size -', canvas.width, 'x', canvas.height, 'Landmarks -', landmarks.length);
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Scaling factors
-    const scaleX = canvas.width;
-    const scaleY = canvas.height;
-
-    // Draw Connections (Simplified list of pose connections)
-    const connections = [
-      [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms
-      [11, 23], [12, 24], [23, 24],                   // Torso
-      [23, 25], [25, 27], [24, 26], [26, 28]         // Legs
-    ];
-
-    ctx.strokeStyle = '#00FF00';
-    ctx.lineWidth = 3;
-
-    connections.forEach(([i, j]) => {
-      const p1 = landmarks[i];
-      const p2 = landmarks[j];
-      if (p1 && p2 && p1.visibility > 0.2 && p2.visibility > 0.2) {
-        ctx.beginPath();
-        ctx.moveTo(p1.x * scaleX, p1.y * scaleY);
-        ctx.lineTo(p2.x * scaleX, p2.y * scaleY);
-        ctx.stroke();
-      }
-    });
-
-    // Draw Joints
-    ctx.fillStyle = '#FF0000';
-    landmarks.forEach((lm) => {
-      if (lm.visibility > 0.2) {
-        ctx.beginPath();
-        ctx.arc(lm.x * scaleX, lm.y * scaleY, 4, 0, 2 * Math.PI);
-        ctx.fill();
-      }
-    });
-  }, [landmarks]);
-
   const stopWorkout = async () => {
     setIsRecording(false);
     setStatus('completed');
@@ -398,10 +398,7 @@ const AIWorkoutSession = () => {
                   muted
                   className="w-full h-96 object-cover"
                 />
-                <canvas
-                  ref={skeletonCanvasRef}
-                  className="absolute inset-0 w-full h-96 pointer-events-none z-10 border-2 border-pink-500"
-                />
+                <SkeletonOverlay landmarks={landmarks} videoRef={videoRef} />
                 <canvas
                   ref={canvasRef}
                   className="hidden"
